@@ -7,6 +7,10 @@ using Moq;
 using System.Xml.Linq;
 using Microsoft.AspNetCore.Mvc;
 using CurrencyConverterModels.Helpers;
+using Microsoft.Extensions.Caching.Memory;
+using System.Dynamic;
+using Microsoft.Extensions.DependencyInjection;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace BambooCardCurrencyConverterTests
 {
@@ -20,18 +24,21 @@ namespace BambooCardCurrencyConverterTests
         [TestMethod]
         public async Task GetAllCurrenciesTest()
         {
+            dynamic mockServiceResult = new ExpandoObject();
+            mockServiceResult.AUD = "Australian Dollar";
+            mockServiceResult.USD = "United States Dollar";
+            mockServiceResult.CAD = "Canadian Dollar";
+            var wrap = (object)mockServiceResult;
+
             //Set up the dependency injection
             var mockService = new Mock<ICurrencyConverter>();
             mockService.Setup(service => service.GetAllCurrencies())
-                       .ReturnsAsync(new Dictionary<string, string>
-                       {
-                           {"AUD","Australian Dollar"},
-                           {"USD","United States Dollar"},
-                           {"CAD","Canadian Dollar"}
-                       });
+                       .ReturnsAsync(wrap);
 
+            var mockCache = GetSystemUnderTest();
+            
             //set up controller
-            var controller = new CurrencyConverterController(mockService.Object);
+            var controller = new CurrencyConverterController(mockService.Object, mockCache);
             //call controller method
             var result = await controller.GetAllCurrencyInfo();
 
@@ -45,23 +52,26 @@ namespace BambooCardCurrencyConverterTests
         [TestMethod]
         public async Task GetExchangeRatesTest()
         {
-            //Set up the dependency injection
-            var mockService = new Mock<ICurrencyConverter>();
-            mockService.Setup(service => service.GetExchangeRates("EUR"))
-                       .ReturnsAsync(new Dictionary<string, object>
-                       {
-                           {"amount",1},
-                           {"base","EUR"},
-                           {"date",new DateTime(2024,05,15)},
-                           {"rates", new Dictionary<string,double> {
+            dynamic mockServiceResult = new ExpandoObject();
+            mockServiceResult.Amount = 1;
+            mockServiceResult.Base = "EUR";
+            mockServiceResult.Date = new DateTime(2024, 05, 15);
+            mockServiceResult.Rates = new Dictionary<string, double> {
                                {"AUD", 1.5055},
                                {"BGN", 3.5067},
                                {"BRL", 5.5023}
-                           } }
-                       });
+                           };
+            var wrap = (object)mockServiceResult;
+
+            //Set up the dependency injection
+            var mockService = new Mock<ICurrencyConverter>();
+            mockService.Setup(service => service.GetExchangeRates("EUR"))
+                       .ReturnsAsync(wrap);
+
+            var mockCache = GetSystemUnderTest();
 
             //set up controller
-            var controller = new CurrencyConverterController(mockService.Object);
+            var controller = new CurrencyConverterController(mockService.Object, mockCache);
             //call controller method
             var result = await controller.GetExchangeRates();
 
@@ -96,8 +106,10 @@ namespace BambooCardCurrencyConverterTests
             mockService.Setup(service => service.Convert(currencyConversionFilter))
                        .ReturnsAsync(mockResult);
 
+            var mockCache = GetSystemUnderTest();
+
             //set up controller
-            var controller = new CurrencyConverterController(mockService.Object);
+            var controller = new CurrencyConverterController(mockService.Object, mockCache);
             //call controller method
             var result = await controller.ConvertCurrency(currencyConversionFilter);
 
@@ -132,13 +144,25 @@ namespace BambooCardCurrencyConverterTests
             mockService.Setup(service => service.GetHistory(currencyHistoryFilter))
                        .ReturnsAsync(mockResult);
 
+            var mockCache = GetSystemUnderTest();
+
             //set up controller
-            var controller = new CurrencyConverterController(mockService.Object);
+            var controller = new CurrencyConverterController(mockService.Object, mockCache);
             //call controller method
             var result = await controller.GetHistory(currencyHistoryFilter);
 
             // Assert
             Assert.IsNotNull(result);
+        }
+
+        public IMemoryCache GetSystemUnderTest()
+        {
+            var services = new ServiceCollection();
+            services.AddMemoryCache();
+            var serviceProvider = services.BuildServiceProvider();
+
+            var memoryCache = serviceProvider.GetService<IMemoryCache>();
+            return memoryCache;
         }
     }
 }

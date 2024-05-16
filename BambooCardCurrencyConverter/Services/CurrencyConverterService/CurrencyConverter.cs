@@ -81,7 +81,7 @@ namespace BambooCardCurrencyConverter.Services.CurrencyConverterService
                 string response = await httpResponseMessage.Content.ReadAsStringAsync();
                 if (string.IsNullOrEmpty(response))
                 {
-                    throw new DataNotFoundException("Sorry we couldn't find any currencies at the moment. Please try again later.");
+                    throw new DataNotFoundException("Sorry we couldn't process this right now. Please try again later.");
                 }
                 CurrencyConversionResult result = JsonConvert.DeserializeObject<CurrencyConversionResult>(response);
                 result.Rates = result.Rates.Where(x => x.Key.ValidateCurrencyExceptions()).ToDictionary();
@@ -116,7 +116,7 @@ namespace BambooCardCurrencyConverter.Services.CurrencyConverterService
                 string response = await httpResponseMessage.Content.ReadAsStringAsync();
                 if (string.IsNullOrEmpty(response))
                 {
-                    throw new DataNotFoundException("Sorry we couldn't find any currencies at the moment. Please try again later.");
+                    throw new DataNotFoundException("Sorry we couldn't find any currencies matching your search filters. Please try again later.");
                 }
                 CurrencyHistoryResult result = JsonConvert.DeserializeObject<CurrencyHistoryResult>(response);
                 result.TotalResults = result.Rates.Count;

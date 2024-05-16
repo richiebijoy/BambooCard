@@ -17,6 +17,9 @@ namespace BambooCardCurrencyConverter.Configurations
                 builder.AddConsole();
             });
 
+            //Implement caching
+            services.AddMemoryCache();
+
             services.AddControllers(o =>
             {
                 //can add Filters as required here

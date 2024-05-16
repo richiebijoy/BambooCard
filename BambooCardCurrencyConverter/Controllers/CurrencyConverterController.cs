@@ -1,7 +1,8 @@
 ﻿using BambooCardCurrencyConverter.Services.CurrencyConverterService;
 using CurrencyConverterModels.ViewModels;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
+using System.Dynamic;
 
 namespace BambooCardCurrencyConverter.Controllers
 {
@@ -13,9 +14,11 @@ namespace BambooCardCurrencyConverter.Controllers
     public class CurrencyConverterController : ControllerBase
     {
         private readonly ICurrencyConverter _currencyConverter;
-        public CurrencyConverterController(ICurrencyConverter currencyConverter)
+        private IMemoryCache _cache;
+        public CurrencyConverterController(ICurrencyConverter currencyConverter, IMemoryCache cache)
         {
             _currencyConverter = currencyConverter;
+            _cache = cache;
         }
         /// <summary>
         /// This is an API to get all currency symbols and their respective full forms so that users know which currencies are supported by the app.
@@ -24,7 +27,18 @@ namespace BambooCardCurrencyConverter.Controllers
         [HttpGet("GetAllCurrencyInfo")]
         public async Task<ActionResult<dynamic>> GetAllCurrencyInfo()
         {
-            return Ok(await _currencyConverter.GetAllCurrencies());
+            string cacheKey = $"GetAllCurrencyInfo_{DateTime.Now.ToShortDateString()}";
+            // Check if data exists in cache
+            if (!_cache.TryGetValue(cacheKey, out ExpandoObject? data))
+            {
+                data = await _currencyConverter.GetAllCurrencies();
+                var cacheOptions = new MemoryCacheEntryOptions
+                {
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(24f)
+                };
+                _cache.Set(cacheKey, data, cacheOptions);
+            }
+            return Ok(data);
         }
         /// <summary>
         /// This is the First Endpoint. It is used to get the current exchange rates relative to a base currency.
@@ -34,7 +48,18 @@ namespace BambooCardCurrencyConverter.Controllers
         [HttpGet("GetExchangeRates")]
         public async Task<ActionResult<dynamic>> GetExchangeRates(string baseCurrency = "EUR")
         {
-            return Ok(await _currencyConverter.GetExchangeRates(baseCurrency));
+            string cacheKey = $"GetExchangeRates_{baseCurrency}";
+            if (!_cache.TryGetValue(cacheKey, out ExpandoObject? data))
+            {
+                data = await _currencyConverter.GetExchangeRates(baseCurrency);
+                var cacheOptions = new MemoryCacheEntryOptions
+                {
+                    //AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5f)
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30f)
+                };
+                _cache.Set(cacheKey, data, cacheOptions);
+            }
+            return Ok(data);
         }
         /// <summary>
         /// This is the Second Endpoint. It is used for currency conversion.
@@ -44,7 +69,18 @@ namespace BambooCardCurrencyConverter.Controllers
         [HttpPost("ConvertCurrency")]
         public async Task<ActionResult<CurrencyConversionResult>> ConvertCurrency(CurrencyConversionFilter currencyConversionFilter)
         {
-            return Ok(await _currencyConverter.Convert(currencyConversionFilter));
+            string cacheKey = $"ConvertCurrency_{currencyConversionFilter.BaseCurrency}_{currencyConversionFilter.FinalCurrency}_{currencyConversionFilter.Amount}";
+            if (!_cache.TryGetValue(cacheKey, out CurrencyConversionResult? data))
+            {
+                data = await _currencyConverter.Convert(currencyConversionFilter);
+                var cacheOptions = new MemoryCacheEntryOptions
+                {
+                    //AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5f)
+                    AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30f)
+                };
+                _cache.Set(cacheKey, data, cacheOptions);
+            }
+            return Ok(data);
         }
         /// <summary>
         /// This is the Third Endpoint. It is used to get historical currency rates.
@@ -54,6 +90,7 @@ namespace BambooCardCurrencyConverter.Controllers
         [HttpPost("GetHistory")]
         public async Task<ActionResult<CurrencyHistoryResult>> GetHistory(CurrencyHistoryFilter currencyHistoryFilter)
         {
+            //can create a special hash using currencyHistoryFilter values and store as cacheKey.
             return Ok(await _currencyConverter.GetHistory(currencyHistoryFilter));
         }
     }
